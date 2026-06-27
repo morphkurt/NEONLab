@@ -206,3 +206,7 @@ input[type=range]{width:55px;accent-color:#1f6feb}
 .oa-dec{font-size:9px;color:#6e7681}
 .oa-op-box{background:#21262d;border:1px solid #388bfd;border-radius:5px;padding:3px 14px;font-family:monospace;font-size:12px;font-weight:700;color:#388bfd;margin:2px 0}
 .oa-arrow{color:#484f58;font-size:14px;line-height:1}
+.oa-dsts{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.oa-vsrc{min-width:110px}.oa-vdst{min-width:110px}
+.oa-lanes{font-size:9px;color:#cdd9e5;font-family:monospace;text-align:center;line-height:1.4}
+.oa-also-flags{font-size:9px;color:#a371f7;margin-top:4px;text-align:center}

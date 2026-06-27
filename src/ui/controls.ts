@@ -6,7 +6,7 @@ import { switchState } from './tabs';
 import { firstPass, execInstr } from '../simulator/core';
 import { firstPass64, execInstr64 } from '../simulator/aarch64/core';
 import { applyVector } from '../binding/vector';
-import { showOpAnim, hideOpAnim, snapshotRegs, regsInToks } from './op-anim';
+import { showOpAnim, hideOpAnim, snapshotRegs, snapshotVRegs, regsInToks, vRegsInToks } from './op-anim';
 
 export function clearTimer(st: SimulatorState): void {
   if (st.timer) { clearInterval(st.timer); st.timer = null; }
@@ -67,7 +67,7 @@ export function stepSim(
     const detail = execInstr(st, instr);
     st.regs[15] = st.pc;
     const after = snapshotRegs(st.regs, animRegs);
-    showOpAnim(instr.tokens, before, after, false, i => `R${i}`);
+    showOpAnim(instr.tokens, before, after, new Map(), new Map(), i => `R${i}`);
     renderAll(which as 'scalar' | 'neon' | 'both', S, fn);
     addLog(which, prev, instr.raw.trim(), detail);
     setStatus(which, 'run', instr.raw.trim());
@@ -243,11 +243,15 @@ export function stepSim64(st: AArch64State, S: WideS, fn: Fn | undefined): boole
   const prev = st.pc;
   st.pc++; st.cycles++;
   try {
-    const animRegs = regsInToks(instr.tokens);
-    const before = snapshotRegs(st.xregs, animRegs);
+    const animRegs  = regsInToks(instr.tokens);
+    const animVRegs = vRegsInToks(instr.tokens);
+    const gpBefore = snapshotRegs(st.xregs, animRegs);
+    const vBefore  = snapshotVRegs(st.vregs, animVRegs);
     const detail = execInstr64(st, instr);
-    const after = snapshotRegs(st.xregs, animRegs);
-    showOpAnim(instr.tokens, before, after, true, i => (i === 31 ? 'SP' : `X${i}`));
+    const gpAfter = snapshotRegs(st.xregs, animRegs);
+    const vAfter  = snapshotVRegs(st.vregs, animVRegs);
+    showOpAnim(instr.tokens, gpBefore, gpAfter, vBefore, vAfter,
+               i => (i === 31 ? 'SP' : `X${i}`));
     renderAll('aarch64', S, fn);
     addLog('aarch64', prev, instr.raw.trim(), detail);
     setStatus('aarch64', 'run', instr.raw.trim());
