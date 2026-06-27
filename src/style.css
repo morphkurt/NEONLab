@@ -186,3 +186,23 @@ input[type=range]{width:55px;accent-color:#1f6feb}
 .it-desc{color:#cdd9e5;margin-bottom:7px;font-size:11px}
 .it-syn{font-family:monospace;font-size:10px;color:#58a6ff;background:#0d1117;border-radius:4px;padding:4px 7px;margin-bottom:5px;display:block}
 .it-note{color:#f0883e;font-size:10px}
+
+/* ── Op data-flow animation ── */
+#op-anim{position:fixed;bottom:20px;right:20px;z-index:1100;flex-direction:column;align-items:center;gap:6px;background:#161b22;border:1px solid #388bfd;border-radius:10px;padding:12px 16px;min-width:180px;max-width:260px;box-shadow:0 8px 32px #000e;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity .25s ease,transform .25s ease}
+#op-anim.oa-visible{opacity:1;transform:translateY(0)}
+#op-anim.oa-fade{opacity:0;transform:translateY(6px)}
+.oa-mnemonic{font-family:monospace;font-size:16px;font-weight:800;color:#58a6ff;letter-spacing:.5px}
+.oa-raw{font-family:monospace;font-size:9px;color:#484f58;margin-top:-2px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.oa-flow{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%}
+.oa-srcs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.oa-node{display:flex;flex-direction:column;align-items:center;border-radius:6px;padding:5px 10px;font-family:monospace;font-size:10px;gap:1px;min-width:80px}
+.oa-src{background:#0a1a2f;border:1px solid #1f6feb}
+.oa-dst{background:#0d1f0d;border:1px solid #3fb950}
+.oa-flags{background:#1f0a20;border:1px solid #a371f7;color:#a371f7;font-size:11px;padding:6px 14px}
+.oa-mem{background:#1f1005;border:1px solid #f0883e;color:#f0883e;font-size:11px;padding:6px 14px}
+.oa-rname{font-size:11px;font-weight:700;color:#58a6ff}
+.oa-dst .oa-rname{color:#3fb950}
+.oa-val{font-size:10px;color:#cdd9e5}
+.oa-dec{font-size:9px;color:#6e7681}
+.oa-op-box{background:#21262d;border:1px solid #388bfd;border-radius:5px;padding:3px 14px;font-family:monospace;font-size:12px;font-weight:700;color:#388bfd;margin:2px 0}
+.oa-arrow{color:#484f58;font-size:14px;line-height:1}

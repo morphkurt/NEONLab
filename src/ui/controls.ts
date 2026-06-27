@@ -6,6 +6,7 @@ import { switchState } from './tabs';
 import { firstPass, execInstr } from '../simulator/core';
 import { firstPass64, execInstr64 } from '../simulator/aarch64/core';
 import { applyVector } from '../binding/vector';
+import { showOpAnim, hideOpAnim, snapshotRegs, regsInToks } from './op-anim';
 
 export function clearTimer(st: SimulatorState): void {
   if (st.timer) { clearInterval(st.timer); st.timer = null; }
@@ -31,6 +32,7 @@ function doneSim(
 ): void {
   clearTimer(st);
   hideCurLine(which);
+  hideOpAnim();
   setButtons(which, false);
   setStatus(which, 'done', 'Done');
   renderAll(which as 'scalar' | 'neon' | 'both', S, fn);
@@ -60,8 +62,12 @@ export function stepSim(
   const prev = st.pc;
   st.pc++; st.cycles++;
   try {
+    const animRegs = regsInToks(instr.tokens);
+    const before = snapshotRegs(st.regs, animRegs);
     const detail = execInstr(st, instr);
     st.regs[15] = st.pc;
+    const after = snapshotRegs(st.regs, animRegs);
+    showOpAnim(instr.tokens, before, after, false, i => `R${i}`);
     renderAll(which as 'scalar' | 'neon' | 'both', S, fn);
     addLog(which, prev, instr.raw.trim(), detail);
     setStatus(which, 'run', instr.raw.trim());
@@ -120,6 +126,7 @@ export function runSim(
 
 export function pauseSim(which: string, st: SimulatorState): void {
   hideCurLine(which);
+  hideOpAnim();
   clearTimer(st);
   const done = st.pc >= st.instructions.length || st.instructions.length === 0;
   setButtons(which, !done);
@@ -206,6 +213,7 @@ function applyFromInputBar64(st: AArch64State, fn: Fn | undefined): void {
 function doneSim64(which: string, st: AArch64State, S: WideS, fn: Fn | undefined): void {
   clearTimer64(st);
   hideCurLine(which);
+  hideOpAnim();
   setButtons(which, false);
   setStatus(which, 'done', 'Done');
   renderAll('aarch64', S, fn);
@@ -235,7 +243,11 @@ export function stepSim64(st: AArch64State, S: WideS, fn: Fn | undefined): boole
   const prev = st.pc;
   st.pc++; st.cycles++;
   try {
+    const animRegs = regsInToks(instr.tokens);
+    const before = snapshotRegs(st.xregs, animRegs);
     const detail = execInstr64(st, instr);
+    const after = snapshotRegs(st.xregs, animRegs);
+    showOpAnim(instr.tokens, before, after, true, i => (i === 31 ? 'SP' : `X${i}`));
     renderAll('aarch64', S, fn);
     addLog('aarch64', prev, instr.raw.trim(), detail);
     setStatus('aarch64', 'run', instr.raw.trim());
@@ -265,6 +277,7 @@ export function runSim64(st: AArch64State, S: WideS, fn: Fn | undefined): void {
 
 export function pauseSim64(st: AArch64State): void {
   hideCurLine('aarch64');
+  hideOpAnim();
   clearTimer64(st);
   const done = st.pc >= st.instructions.length || st.instructions.length === 0;
   setButtons('aarch64', !done);
