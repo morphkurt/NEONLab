@@ -343,6 +343,12 @@ const NL = {
 window.NL = NL;
 
 // ── Load initial state ───────────────────────────────────────
+const defaultVectors: VecRow[] = [
+  { dst: '[200, 100, 50, 255]',  src: '[0, 200, 100, 0]',    alpha: '128', n: '4', expected: '' },
+  { dst: '[0, 0, 0, 0]',         src: '[200, 200, 200, 200]', alpha: '255', n: '4', expected: '' },
+  { dst: '[128, 128, 128, 128]', src: '[0, 0, 0, 0]',         alpha: '64',  n: '4', expected: '' },
+];
+
 const restored = loadFromStorage();
 if (!restored) {
   const scalarDefault  = (document.getElementById('code-scalar')  as HTMLTextAreaElement).value;
@@ -355,11 +361,14 @@ if (!restored) {
     aarch64Default,
   );
   const fn0 = activeFn()!;
-  fn0.vectors = [
-    { dst: '[200, 100, 50, 255]',  src: '[0, 200, 100, 0]',    alpha: '128', n: '4', expected: '' },
-    { dst: '[0, 0, 0, 0]',         src: '[200, 200, 200, 200]', alpha: '255', n: '4', expected: '' },
-    { dst: '[128, 128, 128, 128]', src: '[0, 0, 0, 0]',         alpha: '64',  n: '4', expected: '' },
-  ];
+  fn0.vectors = defaultVectors.map(v => ({ ...v }));
+  fn0.results = fn0.vectors.map(() => null);
+}
+
+// Migrate: if stored data had no vectors, seed with defaults
+const fn0 = activeFn();
+if (fn0 && fn0.vectors.length === 0 && fn0.sig.includes('alpha_blend')) {
+  fn0.vectors = defaultVectors.map(v => ({ ...v }));
   fn0.results = fn0.vectors.map(() => null);
 }
 
