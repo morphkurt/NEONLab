@@ -55,17 +55,15 @@ export function hideInstrTT(): void {
 export function setupInstrHover(taId: string, lookupFn: (tok: string) => LookupResult | null): void {
   const ta = document.getElementById(taId) as HTMLTextAreaElement | null;
   if (!ta) return;
-  let LINE_H = 0, PAD = 0, lastLineIdx = -1;
+  let lastLineIdx = -1;
 
   ta.addEventListener('mousemove', e => {
-    if (!LINE_H) {
-      const cs = getComputedStyle(ta);
-      LINE_H = parseFloat(cs.lineHeight) || 18;
-      PAD    = parseFloat(cs.paddingTop)  || 6;
-    }
-    const rect = ta.getBoundingClientRect();
-    const y = e.clientY - rect.top + ta.scrollTop - PAD;
-    const lineIdx = Math.floor(y / LINE_H);
+    const cs    = getComputedStyle(ta);
+    const lineH = parseFloat(cs.lineHeight) || 18;
+    const pad   = parseFloat(cs.paddingTop)  || 6;
+    const rect  = ta.getBoundingClientRect();
+    const y     = e.clientY - rect.top + ta.scrollTop - pad;
+    const lineIdx = Math.floor(y / lineH);
     if (lineIdx === lastLineIdx) return;
     lastLineIdx = lineIdx;
     const lines = ta.value.split('\n');
