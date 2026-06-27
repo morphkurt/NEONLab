@@ -46,6 +46,7 @@ export function renderVecTable(
     thHtml += `<th style="color:#f0883e">expected</th>`;
     thHtml += `<th style="color:#3fb950">scalar ${outP ? `<span style="color:#30363d;font-size:9px">${outP.name}[]</span>` : 'ret'}</th>`;
     thHtml += `<th style="color:#a371f7">neon ${outP ? `<span style="color:#30363d;font-size:9px">${outP.name}[]</span>` : 'ret'}</th>`;
+    thHtml += `<th style="color:#58a6ff">aarch64 ${outP ? `<span style="color:#30363d;font-size:9px">${outP.name}[]</span>` : 'ret'}</th>`;
     thHtml += `<th></th></tr>`;
     thead.innerHTML = thHtml;
   }
@@ -57,14 +58,18 @@ export function renderVecTable(
   fn.vectors.forEach((vec: VecRow, vi: number) => {
     const res = fn.results[vi];
     const expNum = parseExpected(vec['expected']);
-    const sOut = outP ? res?.scalar?.outPtrs?.[outP.name] ?? null : null;
-    const nOut = outP ? res?.neon?.outPtrs?.[outP.name] ?? null : null;
-    const sVal = res?.scalar?.retVal ?? null;
-    const nVal = res?.neon?.retVal ?? null;
+    const sOut  = outP ? res?.scalar?.outPtrs?.[outP.name]   ?? null : null;
+    const nOut  = outP ? res?.neon?.outPtrs?.[outP.name]     ?? null : null;
+    const aOut  = outP ? res?.aarch64?.outPtrs?.[outP.name]  ?? null : null;
+    const sVal  = res?.scalar?.retVal  ?? null;
+    const nVal  = res?.neon?.retVal    ?? null;
+    const aVal  = res?.aarch64?.retVal ?? null;
 
     let pass = false;
     if (res) {
-      if (outP && sOut && nOut) {
+      if (outP && sOut && nOut && aOut) {
+        pass = sOut.every((v, i) => Math.round(v) === Math.round(nOut[i] ?? 0) && Math.round(v) === Math.round(aOut[i] ?? 0));
+      } else if (outP && sOut && nOut) {
         pass = sOut.every((v, i) => Math.round(v) === Math.round(nOut[i] ?? 0));
       } else if (typeof expNum === 'number' && sVal != null && nVal != null) {
         pass = Math.round(sVal) === Math.round(expNum) && Math.round(nVal) === Math.round(expNum);
@@ -84,11 +89,14 @@ export function renderVecTable(
     if (outP) {
       tdHtml += `<td class="vt-result" style="min-width:110px">${res ? renderArrCell(sOut, nOut) : ''}</td>`;
       tdHtml += `<td class="vt-result" style="min-width:110px">${res ? renderArrCell(nOut, sOut) : ''}</td>`;
+      tdHtml += `<td class="vt-result" style="min-width:110px">${res?.aarch64 ? renderArrCell(aOut, sOut) : ''}</td>`;
     } else {
       const sOk = typeof expNum === 'number' && sVal != null && Math.round(sVal) === Math.round(expNum);
       const nOk = typeof expNum === 'number' && nVal != null && Math.round(nVal) === Math.round(expNum);
+      const aOk = typeof expNum === 'number' && aVal != null && Math.round(aVal) === Math.round(expNum);
       tdHtml += `<td class="vt-result ${sOk ? 'ok' : res ? 'fail' : ''}">${res ? `${sVal ?? '—'}` : ''}</td>`;
       tdHtml += `<td class="vt-result ${nOk ? 'ok' : res ? 'fail' : ''}">${res ? `${nVal ?? '—'}` : ''}</td>`;
+      tdHtml += `<td class="vt-result ${aOk ? 'ok' : res?.aarch64 ? 'fail' : ''}">${res?.aarch64 ? `${aVal ?? '—'}` : ''}</td>`;
     }
     tdHtml += `<td><button class="vt-del" data-vi="${vi}" title="Remove">×</button></td>`;
 
