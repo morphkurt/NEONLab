@@ -2,6 +2,7 @@ import './style.css';
 
 import { S } from './simulator/state';
 import { firstPass } from './simulator/core';
+import { firstPass64, execInstr64 } from './simulator/aarch64/core';
 import {
   fnRegistry, activeFnIdx, activeFn, addFunction, selectFunction, deleteFunction,
   getFnTabNames, setVecParam, addVectorRow, deleteVectorRow, clearVecResults,
@@ -23,6 +24,7 @@ import { lookupInstrRef } from './data/instr-ref';
 import { execInstr } from './simulator/core';
 import {
   loadCode, runSim, stepSim, pauseSim, resetSim, runBothAndCompare,
+  loadCode64, stepSim64, runSim64, pauseSim64, resetSim64,
   setButtons, clearTimer,
 } from './ui/controls';
 import { setStatus } from './ui/log';
@@ -34,10 +36,11 @@ import { setEngines, enginesReady, runWithUnicorn } from './engine/runner';
 function flushEditorToFn(): void {
   const fn = activeFn();
   if (fn && activeFnIdx >= 0) {
-    fn.scalarCode = getCodeValue('scalar');
-    fn.neonCode   = getCodeValue('neon');
-    fn.sig        = getSigValue();
-    fn.parsed     = parseSig(fn.sig);
+    fn.scalarCode  = getCodeValue('scalar');
+    fn.neonCode    = getCodeValue('neon');
+    fn.aarch64Code = getCodeValue('aarch64');
+    fn.sig         = getSigValue();
+    fn.parsed      = parseSig(fn.sig);
   }
 }
 
@@ -47,11 +50,13 @@ wireCallbacks(
     flushEditorToFn();
     const fn = fnRegistry[idx];
     if (!fn) return;
-    setCodeValue('scalar', fn.scalarCode);
-    setCodeValue('neon',   fn.neonCode);
+    setCodeValue('scalar',  fn.scalarCode);
+    setCodeValue('neon',    fn.neonCode);
+    setCodeValue('aarch64', fn.aarch64Code);
     setSigValue(fn.sig);
     syncLN('code-scalar', 'ln-scalar');
     syncLN('code-neon',   'ln-neon');
+    syncLN('code-aarch64', 'ln-aarch64');
     onSigChange(fn.sig);
     refreshVecTable();
     renderAll('both', S, fn);
@@ -85,6 +90,62 @@ function refreshVecTable(): void {
     (vi, key, val) => { setVecParam(vi, key, val); scheduleAutoSave(); },
     (vi) => { deleteVectorRow(vi); refreshVecTable(); scheduleAutoSave(); },
   );
+}
+
+// ── Run all vectors (AArch64 JS sim) ─────────────────────────
+function runToEnd64(vec: VecRow): { retVal: number | null; outPtrs: Record<string, number[]> } {
+  const fn = activeFn();
+  const st = S.aarch64;
+  st.xregs.fill(0);
+  st.pstate = { N: false, Z: false, C: false, V: false };
+  st.vregs.forEach(v => v.fill(0));
+  st.memory = {}; st.pc = 0; st.cycles = 0;
+  st.changed.clear(); st.vregChg.clear(); st.flagChg.clear();
+
+  // Apply vector params to xregs using tmp SimulatorState
+  if (fn?.parsed) {
+    const tmp = {
+      regs: st.xregs,
+      cpsr: { N: false, Z: false, C: false, V: false },
+      neon: [] as Int32Array[],
+      memory: st.memory,
+      pc: 0, cycles: 0,
+      instructions: [] as import('./types').ParsedInstruction[],
+      labels: {} as Record<string, number>,
+      changed: new Set<number>(),
+      neonChg: new Set<number>(),
+      flagChg: new Set<string>(),
+      timer: null,
+    };
+    applyVector(tmp, fn.parsed, vec);
+    st.memory = tmp.memory;
+  }
+
+  let guard = 0;
+  while (st.pc < st.instructions.length && guard++ < 100000) {
+    const instr = st.instructions[st.pc];
+    if (!instr) break;
+    st.pc++; st.cycles++;
+    try { execInstr64(st, instr); } catch (_) { break; }
+  }
+
+  // Read return value from X0
+  const retVal = fn?.parsed ? (st.xregs[0] | 0) : null;
+  // Read output pointers
+  const outPtrs: Record<string, number[]> = {};
+  if (fn?.parsed) {
+    let memPtr = 0x10000;
+    fn.parsed.params.forEach(p => {
+      if (p.kind.base === 'ptr') {
+        const raw = vec[p.name];
+        const arr = raw ? JSON.parse(raw) as number[] : [];
+        const es = p.kind.elemSize ?? 4;
+        outPtrs[p.name] = Array.from({ length: arr.length }, (_, i) => st.memory[(memPtr + i * es) >>> 0] ?? 0);
+        memPtr += Math.max(arr.length, 1) * es;
+      }
+    });
+  }
+  return { retVal, outPtrs };
 }
 
 // ── Run all vectors (JS sim) ─────────────────────────────────
@@ -121,12 +182,13 @@ async function doRunAllVectors(): Promise<void> {
   if (!fn) return;
 
   if (enginesReady) {
-    setStatus('scalar', 'run', 'QEMU running…');
-    setStatus('neon',   'run', 'QEMU running…');
+    setStatus('scalar',  'run', 'QEMU running…');
+    setStatus('neon',    'run', 'QEMU running…');
+    setStatus('aarch64', 'run', 'JS running…');
     fn.results = [];
     try {
       for (const vec of fn.vectors) {
-        const result: VecResult = { scalar: null, neon: null, engine: 'qemu' };
+        const result: VecResult = { scalar: null, neon: null, aarch64: null, engine: 'qemu' };
         for (const which of ['scalar', 'neon'] as const) {
           try {
             const srcCode = getCodeValue(which);
@@ -139,6 +201,14 @@ async function doRunAllVectors(): Promise<void> {
           } catch (e) {
             result[which] = { retVal: null, outPtrs: {}, error: String(e) };
           }
+        }
+        // AArch64 always uses JS sim
+        try {
+          firstPass64(getCodeValue('aarch64').split('\n'), S.aarch64);
+          const { retVal, outPtrs } = runToEnd64(vec);
+          result.aarch64 = { retVal, outPtrs };
+        } catch (e) {
+          result.aarch64 = { retVal: null, outPtrs: {}, error: String(e) };
         }
         fn.results.push(result);
       }
@@ -154,13 +224,20 @@ async function doRunAllVectors(): Promise<void> {
       const lines = getCodeValue(which).split('\n');
       firstPass(lines, S[which]);
     });
+    firstPass64(getCodeValue('aarch64').split('\n'), S.aarch64);
 
     fn.results = fn.vectors.map(vec => {
-      const result: VecResult = { scalar: null, neon: null, engine: 'js' };
+      const result: VecResult = { scalar: null, neon: null, aarch64: null, engine: 'js' };
       (['scalar', 'neon'] as const).forEach(which => {
         const { retVal, outPtrs } = runToEnd(which, vec);
         result[which] = { retVal, outPtrs };
       });
+      try {
+        const { retVal, outPtrs } = runToEnd64(vec);
+        result.aarch64 = { retVal, outPtrs };
+      } catch (e) {
+        result.aarch64 = { retVal: null, outPtrs: {}, error: String(e) };
+      }
       return result;
     });
 
@@ -169,10 +246,12 @@ async function doRunAllVectors(): Promise<void> {
   }
 
   renderAll('both', S, fn);
+  renderAll('aarch64', S, fn);
   refreshVecTable();
   renderCompare(S, fn);
-  setStatus('scalar', 'done', `${fn.vectors.length} vectors done`);
-  setStatus('neon',   'done', `${fn.vectors.length} vectors done`);
+  setStatus('scalar',  'done', `${fn.vectors.length} vectors done`);
+  setStatus('neon',    'done', `${fn.vectors.length} vectors done`);
+  setStatus('aarch64', 'done', `${fn.vectors.length} vectors done`);
 }
 
 // ── Engine init ──────────────────────────────────────────────
@@ -201,14 +280,16 @@ async function initEngines(): Promise<void> {
 
 // ── DOM setup ────────────────────────────────────────────────
 buildTransGrid();
-setupLN('code-scalar', 'ln-scalar');
-setupLN('code-neon',   'ln-neon');
+setupLN('code-scalar',  'ln-scalar');
+setupLN('code-neon',    'ln-neon');
+setupLN('code-aarch64', 'ln-aarch64');
 setupTransHighlight('code-scalar');
 setupTransHighlight('code-neon');
-setupInstrHover('code-scalar', lookupInstrRef);
-setupInstrHover('code-neon',   lookupInstrRef);
+setupInstrHover('code-scalar',  lookupInstrRef);
+setupInstrHover('code-neon',    lookupInstrRef);
+setupInstrHover('code-aarch64', lookupInstrRef);
 
-(['scalar', 'neon'] as const).forEach(w => {
+(['scalar', 'neon', 'aarch64'] as const).forEach(w => {
   const ta = document.getElementById(`code-${w}`) as HTMLTextAreaElement | null;
   const hl = document.getElementById(`hl-${w}`);
   ta?.addEventListener('scroll', () => {
@@ -219,6 +300,7 @@ setupInstrHover('code-neon',   lookupInstrRef);
 
 document.getElementById('code-scalar')?.addEventListener('input', scheduleAutoSave);
 document.getElementById('code-neon')?.addEventListener('input', scheduleAutoSave);
+document.getElementById('code-aarch64')?.addEventListener('input', scheduleAutoSave);
 document.getElementById('sig-input')?.addEventListener('input', e => {
   onSigChange((e.target as HTMLInputElement).value);
   scheduleAutoSave();
@@ -237,23 +319,40 @@ const NL = {
   exportASM,
   runAllVectors:       () => { void doRunAllVectors(); },
   runBothAndCompare:   () => runBothAndCompare(S, activeFn()),
-  loadCode:  (w: string) => loadCode(w,  S[w as 'scalar'|'neon'], S, activeFn()),
-  step:      (w: string) => stepSim(w,   S[w as 'scalar'|'neon'], S, activeFn()),
-  run:       (w: string) => runSim(w,    S[w as 'scalar'|'neon'], S, activeFn()),
-  pause:     (w: string) => pauseSim(w,  S[w as 'scalar'|'neon']),
-  reset:     (w: string) => resetSim(w,  S[w as 'scalar'|'neon'], S, activeFn()),
+  loadCode:  (w: string) => {
+    if (w === 'aarch64') loadCode64(S.aarch64, S, activeFn());
+    else loadCode(w, S[w as 'scalar'|'neon'], S, activeFn());
+  },
+  step:      (w: string) => {
+    if (w === 'aarch64') stepSim64(S.aarch64, S, activeFn());
+    else stepSim(w, S[w as 'scalar'|'neon'], S, activeFn());
+  },
+  run:       (w: string) => {
+    if (w === 'aarch64') runSim64(S.aarch64, S, activeFn());
+    else runSim(w, S[w as 'scalar'|'neon'], S, activeFn());
+  },
+  pause:     (w: string) => {
+    if (w === 'aarch64') pauseSim64(S.aarch64);
+    else pauseSim(w, S[w as 'scalar'|'neon']);
+  },
+  reset:     (w: string) => {
+    if (w === 'aarch64') resetSim64(S.aarch64, S, activeFn());
+    else resetSim(w, S[w as 'scalar'|'neon'], S, activeFn());
+  },
 };
 window.NL = NL;
 
 // ── Load initial state ───────────────────────────────────────
 const restored = loadFromStorage();
 if (!restored) {
-  const scalarDefault = (document.getElementById('code-scalar') as HTMLTextAreaElement).value;
-  const neonDefault   = (document.getElementById('code-neon')   as HTMLTextAreaElement).value;
+  const scalarDefault  = (document.getElementById('code-scalar')  as HTMLTextAreaElement).value;
+  const neonDefault    = (document.getElementById('code-neon')    as HTMLTextAreaElement).value;
+  const aarch64Default = (document.getElementById('code-aarch64') as HTMLTextAreaElement).value;
   addFunction(
     'int32_t alpha_blend_row(int32_t* dst, int32_t* src, int32_t alpha, int32_t n)',
     scalarDefault,
     neonDefault,
+    aarch64Default,
   );
   const fn0 = activeFn()!;
   fn0.vectors = [
@@ -265,9 +364,11 @@ if (!restored) {
 }
 
 renderAll('both', S, activeFn());
+renderAll('aarch64', S, activeFn());
 refreshVecTable();
-setButtons('scalar', false);
-setButtons('neon',   false);
+setButtons('scalar',  false);
+setButtons('neon',    false);
+setButtons('aarch64', false);
 
 const g = globalThis as Record<string, unknown>;
 if (typeof g['MUnicorn'] === 'function' && typeof g['MKeystone'] === 'function') {

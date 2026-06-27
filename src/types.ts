@@ -41,6 +41,7 @@ export interface VecSideResult {
 export interface VecResult {
   scalar: VecSideResult | null;
   neon:   VecSideResult | null;
+  aarch64: VecSideResult | null;
   engine: 'js' | 'qemu';
 }
 
@@ -50,10 +51,13 @@ export interface Fn {
   parsed: ParsedSig | null;
   scalarCode: string;
   neonCode: string;
+  aarch64Code: string;
   vectors: VecRow[];
   results: (VecResult | null)[];
   labels: { regs: Record<number, string>; lanes: Record<string, string> };
 }
+
+export type { AArch64State } from './simulator/aarch64/state';
 
 export interface InstrInfo {
   name: string;

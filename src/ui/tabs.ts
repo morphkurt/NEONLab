@@ -1,12 +1,12 @@
 export function switchEditor(which: string): void {
-  (['scalar', 'neon'] as const).forEach(w => {
+  (['scalar', 'neon', 'aarch64'] as const).forEach(w => {
     document.getElementById(`etab-${w}`)?.classList.toggle('active', w === which);
     document.getElementById(`ep-${w}`)?.classList.toggle('active', w === which);
   });
 }
 
 export function switchState(which: string): void {
-  (['scalar', 'neon', 'cmp'] as const).forEach(w => {
+  (['scalar', 'neon', 'cmp', 'aarch64'] as const).forEach(w => {
     document.getElementById(`stab-${w}`)?.classList.toggle('active', w === which);
     document.getElementById(`sp-${w}`)?.classList.toggle('active', w === which);
   });

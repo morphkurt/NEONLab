@@ -1,5 +1,6 @@
-import type { SimulatorState, Fn } from '../types';
+import type { SimulatorState, Fn, AArch64State } from '../types';
 import { toS32, hex8 } from '../simulator/state';
+import { hex8_64 } from '../simulator/aarch64/state';
 import { qGetU32, qGetLanes } from '../simulator/neon';
 import { showTooltip } from './tooltips';
 
@@ -117,7 +118,74 @@ export function renderNEON(st: SimulatorState, cid: string): void {
   }
 }
 
-export function renderAll(which: 'scalar' | 'neon' | 'both', S: { scalar: SimulatorState; neon: SimulatorState }, fn?: Fn): void {
+const A64_ALIAS: Record<number, string> = { 28: 'X28', 29: 'FP', 30: 'LR', 31: 'SP' };
+
+export function renderGP64(st: AArch64State, cid: string): void {
+  const g = document.getElementById(cid);
+  if (!g) return;
+  g.innerHTML = '';
+  for (let i = 0; i <= 31; i++) {
+    const v = st.xregs[i] ?? 0;
+    const chg = st.changed.has(i);
+    // Show X0-X15 always, X16-X30 only if non-zero or changed, always show SP (index 31)
+    if (i >= 16 && i <= 30 && v === 0 && !chg) continue;
+    const name = i === 31 ? 'SP' : `X${i}`;
+    const alias = A64_ALIAS[i] ?? '';
+    const c = document.createElement('div');
+    c.className = 'rc' + (chg ? ' changed' : '');
+    c.innerHTML = `<div class="rc-head"><span class="rc-name">${name}</span><span class="rc-alias">${alias}</span></div>
+<div class="rc-hex">${hex8_64(v)}</div><div class="rc-dec">${v | 0}</div>`;
+    c.addEventListener('click', ev => showTooltip(ev as MouseEvent, `${name}${alias ? ` — ${alias}` : ''}`, v));
+    g.appendChild(c);
+  }
+}
+
+export function renderPSTATE(st: AArch64State, cid: string): void {
+  const row = document.getElementById(cid);
+  if (!row) return;
+  row.innerHTML = '';
+  (['N', 'Z', 'C', 'V'] as const).forEach(k => {
+    const v   = st.pstate[k];
+    const chg = st.flagChg.has(k);
+    const titles: Record<string, string> = { N: 'Negative', Z: 'Zero', C: 'Carry', V: 'oVerflow' };
+    const c = document.createElement('div');
+    c.className = 'fc' + (chg ? ' changed' : '');
+    c.title = titles[k] ?? k;
+    c.innerHTML = `<div class="fn">${k}</div><div class="fv ${v ? 'set' : 'clr'}">${v ? 1 : 0}</div>`;
+    row.appendChild(c);
+  });
+  const mc = document.createElement('div');
+  mc.className = 'fc mode';
+  mc.innerHTML = `<div class="fn">MODE</div><div class="fv">EL0</div>`;
+  row.appendChild(mc);
+}
+
+export function renderVRegs64(st: AArch64State, cid: string): void {
+  const cont = document.getElementById(cid);
+  if (!cont) return;
+  cont.innerHTML = '';
+  const { vregs } = st;
+  for (let qi = 0; qi < 32; qi++) {
+    const chg = st.vregChg.has(qi);
+    const allZero = Array.from(vregs[qi]).every(v => v === 0);
+    if (allZero && !chg && qi >= 8) continue;
+    const u32 = Array.from(vregs[qi]).map(v => v >>> 0);
+    const u8 = u32.flatMap(v => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF]);
+    const rawHex = u8.map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const nr = document.createElement('div');
+    nr.className = 'nr' + (chg ? ' changed' : '');
+    nr.innerHTML = `<div class="nr-hdr"><span class="nr-q">V${qi}</span><span class="nr-raw">${rawHex}</span></div>
+<div class="nr-lanes">
+<div class="lane-row"><span class="lane-type">.U32</span><div class="lanes">${u32.map(v => `<div class="lane"><span class="lv u32">0x${v.toString(16).toUpperCase().padStart(8, '0')}</span></div>`).join('')}</div></div>
+<div class="lane-row"><span class="lane-type">.U8</span><div class="lanes">${u8.map(v => `<div class="lane"><span class="lv u8">${v.toString(16).padStart(2, '0')}</span></div>`).join('')}</div></div>
+</div>`;
+    cont.appendChild(nr);
+  }
+}
+
+export type WideS = { scalar: SimulatorState; neon: SimulatorState; aarch64: AArch64State };
+
+export function renderAll(which: 'scalar' | 'neon' | 'aarch64' | 'both', S: WideS, fn?: Fn): void {
   if (which === 'scalar' || which === 'both') {
     renderGP(S.scalar, 'sgp', fn);
     renderCPSR(S.scalar, 'scpsr');
@@ -127,9 +195,14 @@ export function renderAll(which: 'scalar' | 'neon' | 'both', S: { scalar: Simula
     renderCPSR(S.neon, 'ncpsr');
     renderNEON(S.neon, 'nneon');
   }
+  if (which === 'aarch64' || which === 'both') {
+    renderGP64(S.aarch64, 'agp');
+    renderPSTATE(S.aarch64, 'apstate');
+    renderVRegs64(S.aarch64, 'avneon');
+  }
 }
 
-export function renderCompare(S: { scalar: SimulatorState; neon: SimulatorState }, _fn: Fn | undefined): void {
+export function renderCompare(S: WideS, _fn: Fn | undefined): void {
   let html = '';
   for (let i = 0; i < 16; i++) {
     const sv = S.scalar.regs[i], nv = S.neon.regs[i];
@@ -154,7 +227,7 @@ export function renderCompare(S: { scalar: SimulatorState; neon: SimulatorState 
   document.getElementById('btn-assertions')?.addEventListener('click', () => runAssertions(S));
 }
 
-function runAssertions(S: { scalar: SimulatorState; neon: SimulatorState }): void {
+function runAssertions(S: WideS): void {
   const ta  = document.getElementById('ar-ta') as HTMLTextAreaElement | null;
   const out = document.getElementById('ar-results');
   if (!out) return;

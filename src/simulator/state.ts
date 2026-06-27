@@ -1,4 +1,6 @@
 import type { SimulatorState } from '../types';
+import { createAArch64State } from './aarch64/state';
+export type { AArch64State } from './aarch64/state';
 
 export const toU32 = (v: number): number => v >>> 0;
 export const toS32 = (v: number): number => v | 0;
@@ -21,8 +23,9 @@ export function createState(): SimulatorState {
   };
 }
 
-/** The two live simulator instances used by the app. */
-export const S: { scalar: SimulatorState; neon: SimulatorState } = {
+/** The live simulator instances used by the app. */
+export const S: { scalar: SimulatorState; neon: SimulatorState; aarch64: ReturnType<typeof createAArch64State> } = {
   scalar: createState(),
   neon:   createState(),
+  aarch64: createAArch64State(),
 };

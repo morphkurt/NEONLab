@@ -9,16 +9,18 @@ export function saveToStorage(): void {
   // Flush current editor content before saving
   const fn = activeFn();
   if (fn && activeFnIdx >= 0) {
-    fn.scalarCode = getCodeValue('scalar');
-    fn.neonCode   = getCodeValue('neon');
-    fn.sig        = getSigValue();
-    fn.parsed     = parseSig(fn.sig);
+    fn.scalarCode  = getCodeValue('scalar');
+    fn.neonCode    = getCodeValue('neon');
+    fn.aarch64Code = getCodeValue('aarch64');
+    fn.sig         = getSigValue();
+    fn.parsed      = parseSig(fn.sig);
   }
 
   const data = fnRegistry.map(f => ({
     sig: f.sig,
     scalarCode: f.scalarCode,
     neonCode: f.neonCode,
+    aarch64Code: f.aarch64Code,
     vectors: f.vectors,
   }));
 
@@ -43,11 +45,12 @@ export function loadFromStorage(): boolean {
       sig: string;
       scalarCode: string;
       neonCode: string;
+      aarch64Code?: string;
       vectors: import('../types').VecRow[];
     }>;
     if (!Array.isArray(data) || data.length === 0) return false;
     data.forEach(d => {
-      addFunction(d.sig ?? '', d.scalarCode ?? '', d.neonCode ?? '');
+      addFunction(d.sig ?? '', d.scalarCode ?? '', d.neonCode ?? '', d.aarch64Code ?? '');
       const fn = activeFn();
       if (fn) {
         fn.vectors = Array.isArray(d.vectors) ? d.vectors : [];

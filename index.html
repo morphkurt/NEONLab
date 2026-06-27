@@ -69,6 +69,7 @@
     <div class="etabs">
       <button class="etab active" id="etab-scalar" onclick="NL.switchEditor('scalar')">Scalar ARM</button>
       <button class="etab" id="etab-neon" onclick="NL.switchEditor('neon')">NEON</button>
+      <button class="etab" id="etab-aarch64" onclick="NL.switchEditor('aarch64')">AArch64</button>
     </div>
 
     <div class="editor-pane active" id="ep-scalar">
@@ -144,6 +145,44 @@ LDR R0, [R10]          // return dst[0]
       <div class="log" id="log-neon"></div>
     </div>
 
+    <div class="editor-pane" id="ep-aarch64">
+      <div class="ew">
+        <div class="cur-line-hl" id="hl-aarch64"></div>
+        <div class="lnum" id="ln-aarch64">1</div>
+        <textarea class="code" id="code-aarch64" spellcheck="false">// AArch64 alpha blend — four pixel channels at a time
+// X0=dst(ptr) X1=src(ptr) W2=alpha(0-255) W3=n  (n multiple of 4)
+MOV X10, X0
+DUP V0.4S, W2            // V0 = [alpha x4]
+MOV W4, #256
+SUB W4, W4, W2           // W4 = 256 - alpha
+DUP V1.4S, W4            // V1 = [inv_alpha x4]
+loop:
+  LD1 {V2.4S}, [X0]      // load dst[0..3]
+  LD1 {V3.4S}, [X1]      // load src[0..3]
+  MUL V4.4S, V3.4S, V0.4S // src * alpha
+  MUL V5.4S, V2.4S, V1.4S // dst * inv_alpha
+  ADD V4.4S, V4.4S, V5.4S  // sum
+  USHR V4.4S, V4.4S, #8    // >> 8
+  ST1 {V4.4S}, [X0]        // write blended
+  ADD X0, X0, #16
+  ADD X1, X1, #16
+  SUBS W3, W3, #4
+  B.GT loop
+LDR W0, [X10]
+RET
+</textarea>
+      </div>
+      <div class="ctrl-row">
+        <button class="primary" onclick="NL.loadCode('aarch64')">Load</button>
+        <button id="a-step" onclick="NL.step('aarch64')" disabled>&#9654; Step</button>
+        <button id="a-run"  onclick="NL.run('aarch64')"  disabled>&#9654;&#9654; Run</button>
+        <button id="a-pause" onclick="NL.pause('aarch64')" disabled>&#9208;</button>
+        <button id="a-reset" onclick="NL.reset('aarch64')" class="danger" disabled>&#8634;</button>
+        <div class="speed-w"><label>Speed</label><input type="range" id="spd-aarch64" min="1" max="10" value="7"></div>
+      </div>
+      <div class="log" id="log-aarch64"></div>
+    </div>
+
     <!-- Translation reference -->
     <div class="trans">
       <div class="trans-hdr">Scalar → NEON Reference <span style="color:#30363d;font-weight:400;font-size:8px">(cursor highlights match)</span></div>
@@ -157,6 +196,7 @@ LDR R0, [R10]          // return dst[0]
       <button class="stab active" id="stab-scalar" onclick="NL.switchState('scalar')">Scalar</button>
       <button class="stab" id="stab-neon" onclick="NL.switchState('neon')">NEON</button>
       <button class="stab" id="stab-cmp" onclick="NL.switchState('cmp')">Compare</button>
+      <button class="stab" id="stab-aarch64" onclick="NL.switchState('aarch64')">AArch64</button>
     </div>
     <div class="state-pane active" id="sp-scalar">
       <div class="sec">GP Registers</div><div class="gp-grid" id="sgp"></div>
@@ -170,6 +210,11 @@ LDR R0, [R10]          // return dst[0]
     <div class="state-pane" id="sp-cmp">
       <div id="cmp-content" style="color:#484f58;font-size:12px;padding:16px 0">Run vectors or Compare to see diff.</div>
     </div>
+    <div class="state-pane" id="sp-aarch64">
+      <div class="sec">GP Registers (X)</div><div class="gp-grid" id="agp"></div>
+      <div class="sec">PSTATE</div><div class="cpsr-row" id="apstate"></div>
+      <div class="sec">NEON (V)</div><div id="avneon"></div>
+    </div>
   </div>
 </div>
 
@@ -177,6 +222,7 @@ LDR R0, [R10]          // return dst[0]
 <div class="status">
   <span><span class="sdot" id="dot-scalar"></span><span id="txt-scalar">Scalar: ready</span></span>
   <span><span class="sdot" id="dot-neon"></span><span id="txt-neon">NEON: ready</span></span>
+  <span><span class="sdot" id="dot-aarch64"></span><span id="txt-aarch64">AArch64: ready</span></span>
   <span id="scyc">Cycles: 0</span>
 </div>
 

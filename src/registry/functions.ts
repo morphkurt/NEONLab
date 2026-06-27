@@ -8,13 +8,14 @@ export function activeFn(): Fn | undefined {
   return fnRegistry[activeFnIdx];
 }
 
-export function createFn(sig: string, scalarCode: string, neonCode: string): Fn {
+export function createFn(sig: string, scalarCode: string, neonCode: string, aarch64Code = ''): Fn {
   return {
     id: Date.now(),
     sig,
     parsed: parseSig(sig),
     scalarCode,
     neonCode,
+    aarch64Code,
     vectors: [],
     results: [],
     labels: { regs: {}, lanes: {} },
@@ -37,8 +38,9 @@ export function addFunction(
   sig = '',
   scalarCode = '// scalar ARM code\n',
   neonCode   = '// NEON code\n',
+  aarch64Code = '// AArch64 code\n',
 ): void {
-  const fn = createFn(sig, scalarCode, neonCode);
+  const fn = createFn(sig, scalarCode, neonCode, aarch64Code);
   fnRegistry.push(fn);
   activeFnIdx = fnRegistry.length - 1;
   _onSelect(activeFnIdx);
