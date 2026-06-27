@@ -1,0 +1,25 @@
+export type TransRow = [string, string, string];
+
+export const TRANS: TransRow[] = [
+  ['MOV Rd, #n',   'VMOV.I32 Qd, #n',          'splat imm to all lanes'],
+  ['MOV Rd, Rm',   'VDUP.32 Qd, Rm',            'broadcast GP reg'],
+  ['LDR Rd,[Rn]',  'VLD1.32 {Qd},[Rn]',         'load 4 words into Q'],
+  ['STR Rd,[Rn]',  'VST1.32 {Qd},[Rn]',         'store 4 words from Q'],
+  ['ADD',          'VADD.I32 / VADD.F32',        'element-wise add'],
+  ['SUB',          'VSUB.I32 / VSUB.F32',        'element-wise subtract'],
+  ['MUL',          'VMUL.I32 / VMUL.F32',        'element-wise multiply'],
+  ['MLA (acc)',     'VMLA.I32  Qd,Qn,Qm',        'Qd += Qn * Qm'],
+  ['AND',          'VAND  Qd,Qn,Qm',             ''],
+  ['ORR',          'VORR  Qd,Qn,Qm',             ''],
+  ['EOR',          'VEOR  Qd,Qn,Qm',             ''],
+  ['LSL #n',       'VSHL.I32 Qd,Qm,#n',          'shift left imm'],
+  ['LSR #n',       'VSHR.U32 Qd,Qm,#n',          'logical shift right'],
+  ['ASR #n',       'VSHR.S32 Qd,Qm,#n',          'arithmetic shift right'],
+  ['CMP (==)',     'VCEQ.I32 Qd,Qn,Qm',          '0xFF/0x00 mask'],
+  ['CMP (>)',      'VCGT.S32 Qd,Qn,Qm',          ''],
+  ['MAX',          'VMAX.S32 Qd,Qn,Qm',          ''],
+  ['MIN',          'VMIN.S32 Qd,Qn,Qm',          ''],
+  ['ABS',          'VABS.S32 Qd,Qm',             ''],
+  ['NEG',          'VNEG.S32 Qd,Qm',             ''],
+  ['(reduce)',     'VPADD.I32 Dd,Dn,Dm',          'pairwise add (horizontal)'],
+];
