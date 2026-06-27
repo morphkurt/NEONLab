@@ -1,6 +1,6 @@
 import type { SimulatorState, ParsedSig, VecRow, VecResult } from '../types';
 import { createState, toS32 } from '../simulator/state';
-import { applyVecToUnicorn, readOutputPtrs } from '../binding/vector';
+import { applyVecToUnicorn } from '../binding/vector';
 import type { PtrInfo } from '../binding/vector';
 import type { UnicornModule, KeystoneModule } from './types';
 
@@ -92,11 +92,8 @@ export async function runWithUnicorn(
 
   mu.close();
 
-  const parsedSt = parsed ? { st, ptrs } : null;
-  const finalOutPtrs = parsedSt ? readOutputPtrs(parsedSt.st, parsed!, parsedSt.ptrs) : outPtrs;
   const retVal = toS32(st.regs[0]);
-
-  return { st, retVal, outPtrs: parsed ? finalOutPtrs : outPtrs };
+  return { st, retVal, outPtrs };
 }
 
 export function makeVecResult(retVal: number | null, outPtrs: Record<string, number[]>, engine: 'js' | 'qemu'): VecResult {
