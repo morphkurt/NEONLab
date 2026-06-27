@@ -62,12 +62,16 @@ export function stepSim(
   const prev = st.pc;
   st.pc++; st.cycles++;
   try {
-    const animRegs = regsInToks(instr.tokens);
-    const before = snapshotRegs(st.regs, animRegs);
+    const animRegs  = regsInToks(instr.tokens);
+    const animVRegs = vRegsInToks(instr.tokens);
+    const gpBefore  = snapshotRegs(st.regs, animRegs);
+    const vBefore   = snapshotVRegs(st.neon, animVRegs);
     const detail = execInstr(st, instr);
     st.regs[15] = st.pc;
-    const after = snapshotRegs(st.regs, animRegs);
-    showOpAnim(instr.tokens, before, after, new Map(), new Map(), i => `R${i}`);
+    const gpAfter = snapshotRegs(st.regs, animRegs);
+    const vAfter  = snapshotVRegs(st.neon, animVRegs);
+    showOpAnim(instr.tokens, gpBefore, gpAfter, vBefore, vAfter,
+               i => `R${i}`, i => `Q${i}`);
     renderAll(which as 'scalar' | 'neon' | 'both', S, fn);
     addLog(which, prev, instr.raw.trim(), detail);
     setStatus(which, 'run', instr.raw.trim());
@@ -251,7 +255,7 @@ export function stepSim64(st: AArch64State, S: WideS, fn: Fn | undefined): boole
     const gpAfter = snapshotRegs(st.xregs, animRegs);
     const vAfter  = snapshotVRegs(st.vregs, animVRegs);
     showOpAnim(instr.tokens, gpBefore, gpAfter, vBefore, vAfter,
-               i => (i === 31 ? 'SP' : `X${i}`));
+               i => (i === 31 ? 'SP' : `X${i}`), i => `V${i}`);
     renderAll('aarch64', S, fn);
     addLog('aarch64', prev, instr.raw.trim(), detail);
     setStatus('aarch64', 'run', instr.raw.trim());
