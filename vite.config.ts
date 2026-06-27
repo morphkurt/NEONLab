@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      input: 'app.html',
+      input: 'index.html',
     },
   },
   plugins: [

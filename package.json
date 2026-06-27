@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --open app.html",
+    "dev": "vite --open",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
