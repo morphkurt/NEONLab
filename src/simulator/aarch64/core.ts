@@ -160,6 +160,12 @@ export function execInstr64(st: AArch64State, instr: ParsedInstruction): string 
     }
   }
 
-  // ALU (includes RET, NOP, MOV, ADD, SUB, etc.)
+  // RET means end-of-function — signal halt by advancing PC past all instructions
+  if (n0 === 'RET') {
+    st.pc = st.instructions.length;
+    return 'RET';
+  }
+
+  // ALU (includes NOP, MOV, ADD, SUB, etc.)
   return execALU64(st, instr);
 }
