@@ -65,7 +65,7 @@ table.vt tr.vt-fail td{background:#1a0a0a}
 .ew{flex:1;display:flex;overflow:hidden;min-height:0;position:relative}
 .cur-line-hl{position:absolute;left:32px;right:0;height:18px;background:rgba(31,111,235,0.13);border-left:2px solid #1f6feb;pointer-events:none;display:none;z-index:2;transition:top .08s}
 .lnum{width:32px;background:#0a0d12;border-right:1px solid #21262d;color:#484f58;font-family:monospace;font-size:11px;line-height:18px;padding:6px 4px;text-align:right;user-select:none;white-space:pre;overflow:hidden;flex-shrink:0}
-textarea.code{flex:1;background:#0d1117;color:#e6edf3;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:18px;padding:6px;border:none;outline:none;resize:none;tab-size:4}
+textarea.code{flex:1;background:#0d1117;color:#e6edf3;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:18px;padding:6px;border:none;outline:none;resize:none;tab-size:4;overflow-x:auto;white-space:pre}
 .ctrl-row{display:flex;gap:4px;padding:5px 7px;background:#161b22;border-top:1px solid #21262d;border-bottom:1px solid #21262d;flex-shrink:0;align-items:center}
 button{padding:4px 10px;border:1px solid #30363d;border-radius:5px;background:#21262d;color:#e6edf3;cursor:pointer;font-size:11px;font-weight:600;transition:background .12s,border-color .12s;white-space:nowrap}
 button:hover{background:#30363d;border-color:#58a6ff}

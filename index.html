@@ -79,7 +79,7 @@
       <div class="ew">
         <div class="cur-line-hl" id="hl-scalar"></div>
         <div class="lnum" id="ln-scalar">1</div>
-        <textarea class="code" id="code-scalar" spellcheck="false">// Scalar alpha blend — one pixel channel at a time
+        <textarea class="code" id="code-scalar" spellcheck="false" wrap="off">// Scalar alpha blend — one pixel channel at a time
 // dst[i] = (src[i]*alpha + dst[i]*(256-alpha)) >> 8
 // R0=dst(ptr) R1=src(ptr) R2=alpha(0-255) R3=n
 MOV R10, R0           // save dst base for return
@@ -116,7 +116,7 @@ LDR R0, [R10]         // return dst[0]
       <div class="ew">
         <div class="cur-line-hl" id="hl-neon"></div>
         <div class="lnum" id="ln-neon">1</div>
-        <textarea class="code" id="code-neon" spellcheck="false">// NEON alpha blend — four pixel channels at a time
+        <textarea class="code" id="code-neon" spellcheck="false" wrap="off">// NEON alpha blend — four pixel channels at a time
 // R0=dst(ptr) R1=src(ptr) R2=alpha(0-255) R3=n  (n multiple of 4)
 MOV R10, R0
 VDUP.32 Q0, R2         // Q0 = [alpha, alpha, alpha, alpha]
@@ -152,7 +152,7 @@ LDR R0, [R10]          // return dst[0]
       <div class="ew">
         <div class="cur-line-hl" id="hl-aarch64"></div>
         <div class="lnum" id="ln-aarch64">1</div>
-        <textarea class="code" id="code-aarch64" spellcheck="false">// AArch64 alpha blend — four pixel channels at a time
+        <textarea class="code" id="code-aarch64" spellcheck="false" wrap="off">// AArch64 alpha blend — four pixel channels at a time
 // X0=dst(ptr) X1=src(ptr) W2=alpha(0-255) W3=n  (n multiple of 4)
 MOV X10, X0
 DUP V0.4S, W2            // V0 = [alpha x4]
