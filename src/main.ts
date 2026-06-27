@@ -365,9 +365,15 @@ if (!restored) {
   fn0.results = fn0.vectors.map(() => null);
 }
 
-// Migrate: if stored data had no vectors, seed with defaults
+// Migrate: restore defaults when stored data has no usable signature or vectors
 const fn0 = activeFn();
-if (fn0 && fn0.vectors.length === 0 && fn0.sig.includes('alpha_blend')) {
+if (fn0 && !fn0.parsed) {
+  fn0.sig    = 'int32_t alpha_blend_row(int32_t* dst, int32_t* src, int32_t alpha, int32_t n)';
+  fn0.parsed = parseSig(fn0.sig);
+  setSigValue(fn0.sig);
+  onSigChange(fn0.sig);
+}
+if (fn0 && fn0.vectors.length === 0) {
   fn0.vectors = defaultVectors.map(v => ({ ...v }));
   fn0.results = fn0.vectors.map(() => null);
 }
