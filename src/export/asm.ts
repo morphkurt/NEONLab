@@ -7,7 +7,9 @@ import type { ParsedSig, VecRow } from '../types';
 function convertAsm(code: string, prefix: string, isAarch64 = false): string {
   const lines = code
     .split('\n')
-    .map(l => l.replace(/\/\/(.*)/g, '@ $1').trimEnd())
+    .map(l => isAarch64
+      ? l.replace(/\/\/.*/g, '').trimEnd()   // strip: @ is not a comment char in AArch64
+      : l.replace(/\/\/(.*)/g, '@ $1').trimEnd())
     .filter(l => l.trim());
 
   const labels = new Set<string>();
@@ -49,55 +51,82 @@ function parseArrStr(s: string): number[] {
   return inner.split(',').map(x => parseFloat(x.trim())).filter(x => !isNaN(x));
 }
 
-function buildVectors(
-  name: string, parsed: ParsedSig, vectors: VecRow[],
-  suffix: 's' | 'n' | 'a', fnSuffix: string,
-): string {
-  const hasReturn = parsed.returnType !== 'void';
-  const firstPtr  = parsed.params.find(p => p.kind.base === 'ptr');
+function declareParams(parsed: ParsedSig, vec: VecRow, suffix: string): string {
   let s = '';
+  parsed.params.forEach(p => {
+    if (p.kind.base === 'ptr') {
+      const vals = parseArrStr(vec[p.name] ?? '');
+      const elem = p.type.replace(/\*/g, '').trim();
+      s += `        ${elem} ${p.name}_${suffix}[] = {${vals.join(', ')}};\n`;
+    } else {
+      const v = parseInt(vec[p.name] ?? '0') || 0;
+      s += `        ${p.type} ${p.name} = ${v};\n`;
+    }
+  });
+  return s;
+}
 
-  vectors.forEach((vec, vi) => {
-    s += `    /* vector ${vi + 1} */\n    {\n`;
+function callArgs(parsed: ParsedSig, suffix: string): string {
+  return parsed.params.map(p => p.kind.base === 'ptr' ? `${p.name}_${suffix}` : p.name).join(', ');
+}
+
+function buildTimingBlock(name: string, parsed: ParsedSig, vec: VecRow,
+                          entries: Array<{ suffix: string; fn: string }>, N: number): string {
+  let s = `    /* timing: ${N} iterations on vector 1 */\n    {\n`;
+  entries.forEach(({ suffix, fn }) => {
     parsed.params.forEach(p => {
       if (p.kind.base === 'ptr') {
         const vals = parseArrStr(vec[p.name] ?? '');
         const elem = p.type.replace(/\*/g, '').trim();
-        s += `        ${elem} ${p.name}_${suffix}[] = {${vals.join(', ')}};\n`;
+        s += `        ${elem} _t${suffix}_${p.name}[] = {${vals.join(', ')}};\n`;
       } else {
         const v = parseInt(vec[p.name] ?? '0') || 0;
-        s += `        ${p.type} ${p.name} = ${v};\n`;
+        s += `        ${p.type} _t_${p.name} = ${v};\n`;
       }
     });
+    const args = parsed.params.map(p => p.kind.base === 'ptr' ? `_t${suffix}_${p.name}` : `_t_${p.name}`).join(', ');
+    s += `        struct timespec _t0_${suffix}, _t1_${suffix};\n`;
+    s += `        clock_gettime(CLOCK_MONOTONIC, &_t0_${suffix});\n`;
+    s += `        for (int _i = 0; _i < ${N}; _i++) ${name}_${fn}(${args});\n`;
+    s += `        clock_gettime(CLOCK_MONOTONIC, &_t1_${suffix});\n`;
+    s += `        double ${suffix}_ms = (_t1_${suffix}.tv_sec-_t0_${suffix}.tv_sec)*1000.0`
+       + ` + (_t1_${suffix}.tv_nsec-_t0_${suffix}.tv_nsec)/1e6;\n`;
+  });
+  return s;
+}
 
-    const args = parsed.params.map(p => p.kind.base === 'ptr' ? `${p.name}_${suffix}` : p.name).join(', ');
+function buildMain(parsed: ParsedSig, vectors: VecRow[]): string {
+  const name     = parsed.name;
+  const hasRet   = parsed.returnType !== 'void';
+  const firstPtr = parsed.params.find(p => p.kind.base === 'ptr');
+  const N_ITER   = 10000;
 
-    if (hasReturn) {
-      s += `        ${parsed.returnType} ret = ${name}_${fnSuffix}(${args});\n`;
-    } else {
-      s += `        ${name}_${fnSuffix}(${args});\n`;
-    }
+  let s = `    int pass = 0, fail = 0;\n\n`;
+
+  // ── AArch64 branch ──────────────────────────────────────────────────────────
+  s += `#ifdef __aarch64__\n`;
+  vectors.forEach((vec, vi) => {
+    s += `    /* vector ${vi + 1} */\n    {\n`;
+    s += declareParams(parsed, vec, 'a');
+    if (hasRet) s += `        ${parsed.returnType} ret_a = ${name}_aarch64(${callArgs(parsed, 'a')});\n`;
+    else        s += `        ${name}_aarch64(${callArgs(parsed, 'a')});\n`;
 
     if (firstPtr) {
       const vals = parseArrStr(vec[firstPtr.name] ?? '');
       const n    = vals.length;
-      const elem = firstPtr.type.replace(/\*/g, '').trim();
-      const ref  = parseArrStr(vec[firstPtr.name] ?? '');
-      s += `        ${elem} expected_${suffix}[] = {${ref.join(', ')}};\n`;
-      s += `        int ok = 1;\n`;
-      s += `        for (int i = 0; i < ${n}; i++) if (${firstPtr.name}_${suffix}[i] != expected_${suffix}[i]) { ok = 0; break; }\n`;
-      s += `        if (!ok) {\n`;
-      s += `            printf("Vector ${vi + 1}: FAIL\\n  got:      [");\n`;
-      s += `            for (int i = 0; i < ${n}; i++) printf("%d%s", ${firstPtr.name}_${suffix}[i], i < ${n}-1 ? ", " : "");\n`;
-      s += `            printf("]\\n  expected: [");\n`;
-      s += `            for (int i = 0; i < ${n}; i++) printf("%d%s", expected_${suffix}[i], i < ${n}-1 ? ", " : "");\n`;
-      s += `            printf("]\\n");\n`;
-      s += `        } else { printf("Vector ${vi + 1}: PASS\\n"); }\n`;
-    } else if (hasReturn) {
-      const exp  = vec['expected'] ? parseInt(vec['expected']) : NaN;
-      const check = !isNaN(exp) ? `ret == ${exp}` : `(void)ret, 1`;
-      s += `        int ok = (${check});\n`;
-      s += `        printf("Vector ${vi + 1}: %s  ${fnSuffix}=%d\\n", ok ? "PASS" : "FAIL", (int)ret);\n`;
+      s += `        printf("Vector ${vi + 1}: [");\n`;
+      s += `        for (int i = 0; i < ${n}; i++) printf("%d%s", ${firstPtr.name}_a[i], i<${n}-1?", ":"");\n`;
+      s += `        printf("]  ret=%d\\n", ${hasRet ? '(int)ret_a' : '0'});\n`;
+      s += `        int ok = 1;\n`;  // no reference to compare against in single-impl branch
+    } else if (hasRet) {
+      const exp = vec['expected'] ? parseInt(vec['expected']) : NaN;
+      if (!isNaN(exp)) {
+        s += `        int ok = (ret_a == ${exp});\n`;
+        s += `        printf("Vector ${vi + 1}: %s  aarch64=%d\\n", ok?"PASS":"FAIL", (int)ret_a);\n`;
+      } else {
+        s += `        int ok = 1;\n`;
+        s += `        printf("Vector ${vi + 1}: aarch64=%d\\n", (int)ret_a);\n`;
+      }
     } else {
       s += `        int ok = 1;\n`;
       s += `        printf("Vector ${vi + 1}: ran\\n");\n`;
@@ -105,62 +134,61 @@ function buildVectors(
     s += `        pass += ok; fail += !ok;\n`;
     s += `    }\n\n`;
   });
-  return s;
-}
-
-function buildTiming(name: string, parsed: ParsedSig, vec: VecRow, suffix: 's'|'n'|'a', fnSuffix: string, N: number): string {
-  let s = '';
-  parsed.params.forEach(p => {
-    if (p.kind.base === 'ptr') {
-      const vals = parseArrStr(vec[p.name] ?? '');
-      const elem = p.type.replace(/\*/g, '').trim();
-      s += `        ${elem} _t${suffix}_${p.name}[] = {${vals.join(', ')}};\n`;
-    } else {
-      const v = parseInt(vec[p.name] ?? '0') || 0;
-      s += `        ${p.type} _t_${p.name} = ${v};\n`;
-    }
-  });
-  const args = parsed.params.map(p => p.kind.base === 'ptr' ? `_t${suffix}_${p.name}` : `_t_${p.name}`).join(', ');
-  s += `        clock_gettime(CLOCK_MONOTONIC, &_t0);\n`;
-  s += `        for (int _i = 0; _i < ${N}; _i++) ${name}_${fnSuffix}(${args});\n`;
-  s += `        clock_gettime(CLOCK_MONOTONIC, &_t1);\n`;
-  s += `        double ${suffix}_ms = (_t1.tv_sec-_t0.tv_sec)*1000.0 + (_t1.tv_nsec-_t0.tv_nsec)/1e6;\n`;
-  return s;
-}
-
-function buildMain(parsed: ParsedSig, vectors: VecRow[]): string {
-  const name   = parsed.name;
-  const N_ITER = 10000;
-
-  let s = '';
-  s += `    int pass = 0, fail = 0;\n`;
-  s += `    struct timespec _t0, _t1;\n\n`;
-
-  // AArch64-only branch
-  s += `#ifdef __aarch64__\n`;
-  s += buildVectors(name, parsed, vectors, 'a', 'aarch64');
   if (vectors.length > 0) {
-    s += `    /* timing: ${N_ITER} iterations on vector 1 */\n    {\n`;
-    s += buildTiming(name, parsed, vectors[0], 'a', 'aarch64', N_ITER);
-    s += `        printf("\\nTiming (${N_ITER} iters): aarch64=%.3f ms\\n", a_ms);\n`;
-    s += `    }\n\n`;
+    s += buildTimingBlock(name, parsed, vectors[0], [{ suffix: 'a', fn: 'aarch64' }], N_ITER);
+    s += `        printf("\\nTiming (${N_ITER} iters): aarch64=%.3f ms\\n", a_ms);\n    }\n\n`;
   }
 
-  // ARMv7 scalar + NEON branch
+  // ── ARMv7 branch: scalar vs NEON via memcmp ─────────────────────────────────
   s += `#else\n`;
-  s += buildVectors(name, parsed, vectors, 's', 'scalar');
-  s += buildVectors(name, parsed, vectors, 'n', 'neon');
-  if (vectors.length > 0) {
-    s += `    /* timing: ${N_ITER} iterations on vector 1 */\n    {\n`;
-    s += buildTiming(name, parsed, vectors[0], 's', 'scalar', N_ITER);
-    s += buildTiming(name, parsed, vectors[0], 'n', 'neon', N_ITER);
-    s += `        printf("\\nTiming (${N_ITER} iters): scalar=%.3f ms  neon=%.3f ms  speedup=%.2fx\\n",\n`;
-    s += `               s_ms, n_ms, s_ms / n_ms);\n`;
+  vectors.forEach((vec, vi) => {
+    s += `    /* vector ${vi + 1} */\n    {\n`;
+    s += declareParams(parsed, vec, 's');
+    s += declareParams(parsed, vec, 'n');
+    if (hasRet) {
+      s += `        ${parsed.returnType} ret_s = ${name}_scalar(${callArgs(parsed, 's')});\n`;
+      s += `        ${parsed.returnType} ret_n = ${name}_neon(${callArgs(parsed, 'n')});\n`;
+    } else {
+      s += `        ${name}_scalar(${callArgs(parsed, 's')});\n`;
+      s += `        ${name}_neon(${callArgs(parsed, 'n')});\n`;
+    }
+
+    if (firstPtr) {
+      const vals = parseArrStr(vec[firstPtr.name] ?? '');
+      const n    = vals.length;
+      const elem = firstPtr.type.replace(/\*/g, '').trim();
+      s += `        int ok = (memcmp(${firstPtr.name}_s, ${firstPtr.name}_n, ${n}*sizeof(${elem}))==0);\n`;
+      s += `        if (!ok) {\n`;
+      s += `            printf("Vector ${vi + 1}: FAIL\\n  scalar: [");\n`;
+      s += `            for (int i=0;i<${n};i++) printf("%d%s",${firstPtr.name}_s[i],i<${n}-1?", ":"");\n`;
+      s += `            printf("]\\n  neon:   [");\n`;
+      s += `            for (int i=0;i<${n};i++) printf("%d%s",${firstPtr.name}_n[i],i<${n}-1?", ":"");\n`;
+      s += `            printf("]\\n");\n`;
+      s += `        } else {\n`;
+      s += `            printf("Vector ${vi + 1}: PASS  [");\n`;
+      s += `            for (int i=0;i<${n};i++) printf("%d%s",${firstPtr.name}_s[i],i<${n}-1?", ":"");\n`;
+      s += `            printf("]\\n");\n        }\n`;
+    } else if (hasRet) {
+      const exp   = vec['expected'] ? parseInt(vec['expected']) : NaN;
+      const check = !isNaN(exp) ? `ret_s==${exp} && ret_n==${exp}` : `ret_s==ret_n`;
+      s += `        int ok = (${check});\n`;
+      s += `        printf("Vector ${vi + 1}: %s  scalar=%d  neon=%d\\n", ok?"PASS":"FAIL", (int)ret_s, (int)ret_n);\n`;
+    } else {
+      s += `        int ok = 1;\n`;
+      s += `        printf("Vector ${vi + 1}: ran\\n");\n`;
+    }
+    s += `        pass += ok; fail += !ok;\n`;
     s += `    }\n\n`;
+  });
+  if (vectors.length > 0) {
+    s += buildTimingBlock(name, parsed, vectors[0],
+                          [{ suffix: 's', fn: 'scalar' }, { suffix: 'n', fn: 'neon' }], N_ITER);
+    s += `        printf("\\nTiming (${N_ITER} iters): scalar=%.3f ms  neon=%.3f ms  speedup=%.2fx\\n",\n`;
+    s += `               s_ms, n_ms, s_ms/n_ms);\n    }\n\n`;
   }
   s += `#endif\n\n`;
 
-  s += `    printf("\\nResult: %d/%d passed\\n", pass, pass + fail);\n`;
+  s += `    printf("\\nResult: %d/%d passed\\n", pass, pass+fail);\n`;
   s += `    return fail ? 1 : 0;\n`;
   return s;
 }
