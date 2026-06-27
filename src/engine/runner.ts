@@ -100,5 +100,5 @@ export async function runWithUnicorn(
 }
 
 export function makeVecResult(retVal: number | null, outPtrs: Record<string, number[]>, engine: 'js' | 'qemu'): VecResult {
-  return { retVal, outPtrs, engine };
+  return { scalar: { retVal, outPtrs }, neon: null, engine };
 }

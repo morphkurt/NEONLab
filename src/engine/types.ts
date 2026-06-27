@@ -48,7 +48,7 @@ export interface UnicornModule {
   ARM_REG_PC: number;
   ARM_REG_C1_C0_2: number;
   ARM_REG_FPEXC: number;
-  [key: string]: number;
+  [key: string]: number | (new (arch: number, mode: number) => UnicornHandle);
   Unicorn: new (arch: number, mode: number) => UnicornHandle;
 }
 

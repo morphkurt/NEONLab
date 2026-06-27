@@ -269,7 +269,6 @@ export function execALU(st: SimulatorState, instr: ParsedInstruction): string {
       const rawSa = t3?.startsWith('#') ? parseImm(t3) : (saReg >= 0 ? st.regs[saReg] & 0xFF : 0);
       const rsa = rawSa & 31;
       const a = st.regs[rm];
-      const c = rsa > 0 ? ((a >>> (rsa - 1)) & 1) === 1 : st.cpsr.C;
       const r = rsa ? ((a >>> rsa) | (a << (32 - rsa))) : a;
       st.regs[rd] = r;
       st.changed.add(rd);
