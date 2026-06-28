@@ -32,22 +32,23 @@ import { loadFromHash, share } from './storage/url-share';
 import { exportASM } from './export/asm';
 import { setEngines, enginesReady, runWithUnicorn } from './engine/runner';
 
-// ── Save current editor → active fn ─────────────────────────
-function flushEditorToFn(): void {
-  const fn = activeFn();
-  if (fn && activeFnIdx >= 0) {
-    fn.scalarCode  = getCodeValue('scalar');
-    fn.neonCode    = getCodeValue('neon');
-    fn.aarch64Code = getCodeValue('aarch64');
-    fn.sig         = getSigValue();
-    fn.parsed      = parseSig(fn.sig);
-  }
-}
 
 // ── Wire registry callbacks ──────────────────────────────────
+let _prevFnIdx = -1;
 wireCallbacks(
   (idx) => {
-    flushEditorToFn();
+    // Flush the PREVIOUS function's editor content (not the incoming one)
+    if (_prevFnIdx >= 0 && _prevFnIdx !== idx) {
+      const prev = fnRegistry[_prevFnIdx];
+      if (prev) {
+        prev.scalarCode  = getCodeValue('scalar');
+        prev.neonCode    = getCodeValue('neon');
+        prev.aarch64Code = getCodeValue('aarch64');
+        prev.sig         = getSigValue();
+        prev.parsed      = parseSig(prev.sig);
+      }
+    }
+    _prevFnIdx = idx;
     const fn = fnRegistry[idx];
     if (!fn) return;
     setCodeValue('scalar',  fn.scalarCode);
