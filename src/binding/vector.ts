@@ -119,7 +119,11 @@ export function applyVecToUnicorn(
       ptrs[p.name] = { addr: memPtr, count: arr.length, elemSize: es };
       const buf = new Uint8Array(Math.max(arr.length, 1) * es);
       const view = new DataView(buf.buffer);
-      arr.forEach((v, i) => view.setInt32(i * es, v | 0, true));
+      arr.forEach((v, i) => {
+        if (es === 1) view.setUint8(i, v & 0xFF);
+        else if (es === 2) view.setInt16(i * 2, v & 0xFFFF, true);
+        else view.setInt32(i * 4, v | 0, true);
+      });
       mu.mem_write(memPtr, buf);
       mu.reg_write_i32(uc[`ARM_REG_R${rIdx++}`], memPtr);
       memPtr += buf.length;
