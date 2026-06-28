@@ -28,7 +28,7 @@ import {
   setButtons, clearTimer,
 } from './ui/controls';
 import { setStatus } from './ui/log';
-import { saveToStorage, loadFromStorage, scheduleAutoSave } from './storage/persistence';
+import { loadFromHash, share } from './storage/url-share';
 import { exportASM } from './export/asm';
 import { setEngines, enginesReady, runWithUnicorn } from './engine/runner';
 
@@ -66,8 +66,8 @@ wireCallbacks(
       getFnTabNames(),
       activeFnIdx,
       (i) => selectFunction(i),
-      (i) => { deleteFunction(i); scheduleAutoSave(); },
-      () => { addFunction(); scheduleAutoSave(); },
+      (i) => { deleteFunction(i); },
+      () => { addFunction(); },
     );
   },
 );
@@ -87,8 +87,8 @@ function onSigChange(val: string): void {
 function refreshVecTable(): void {
   renderVecTable(
     activeFn(),
-    (vi, key, val) => { setVecParam(vi, key, val); scheduleAutoSave(); },
-    (vi) => { deleteVectorRow(vi); refreshVecTable(); scheduleAutoSave(); },
+    (vi, key, val) => { setVecParam(vi, key, val); },
+    (vi) => { deleteVectorRow(vi); refreshVecTable(); },
   );
 }
 
@@ -298,12 +298,8 @@ setupInstrHover('code-aarch64', lookupInstrRef);
   });
 });
 
-document.getElementById('code-scalar')?.addEventListener('input', scheduleAutoSave);
-document.getElementById('code-neon')?.addEventListener('input', scheduleAutoSave);
-document.getElementById('code-aarch64')?.addEventListener('input', scheduleAutoSave);
 document.getElementById('sig-input')?.addEventListener('input', e => {
   onSigChange((e.target as HTMLInputElement).value);
-  scheduleAutoSave();
 });
 document.addEventListener('click', () => hideTooltip());
 
@@ -312,10 +308,10 @@ declare global { interface Window { NL: typeof NL } }
 const NL = {
   switchEditor,
   switchState,
-  addFunction:         () => { addFunction(); scheduleAutoSave(); },
-  addVector:           () => { addVectorRow(); refreshVecTable(); scheduleAutoSave(); },
+  addFunction:         () => { addFunction(); },
+  addVector:           () => { addVectorRow(); refreshVecTable(); },
   clearResults:        () => { clearVecResults(); refreshVecTable(); },
-  saveToStorage,
+  share,
   exportASM,
   runAllVectors:       () => { void doRunAllVectors(); },
   runBothAndCompare:   () => runBothAndCompare(S, activeFn()),
@@ -465,7 +461,7 @@ const overlayVectors: VecRow[] = [
   { dst: '[128, 128, 128, 128]', da: '[0, 0, 0, 0]', s: '[0, 0, 0, 0]', a: '[0, 0, 0, 0]', w: '4', expected: '' },
 ];
 
-const restored = loadFromStorage();
+const restored = loadFromHash();
 if (!restored) {
   const scalarDefault  = (document.getElementById('code-scalar')  as HTMLTextAreaElement).value;
   const neonDefault    = (document.getElementById('code-neon')    as HTMLTextAreaElement).value;
