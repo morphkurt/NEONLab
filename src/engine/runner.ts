@@ -85,7 +85,11 @@ export async function runWithUnicorn(
         const rawBuf = mu.mem_read(addr, count * elemSize);
         const buf = rawBuf instanceof Uint8Array ? rawBuf : new Uint8Array(rawBuf);
         const view = new DataView(buf.buffer);
-        outPtrs[p.name] = Array.from({ length: count }, (_, i) => view.getInt32(i * elemSize, true));
+        outPtrs[p.name] = Array.from({ length: count }, (_, i) => {
+          if (elemSize === 1) return view.getUint8(i);
+          if (elemSize === 2) return view.getInt16(i * 2, true);
+          return view.getInt32(i * 4, true);
+        });
       }
     });
   }
